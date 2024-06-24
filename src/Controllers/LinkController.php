@@ -148,6 +148,7 @@ class LinkController extends BaseController
         $subscribe_type = '';
 
         $getBody = '';
+
         $user_agent = strtolower($_SERVER['HTTP_USER_AGENT']);
         if (isset($opts['clash'])) {
             if (strpos($user_agent, 'clashmeta') !==false) {
@@ -155,7 +156,7 @@ class LinkController extends BaseController
                 $opts['clashmeta'] = 1;
             }
         }
-        $sub_type_array = ['list', 'ssd', 'clash', 'clashmeta' ,'surge', 'surfboard', 'anxray', 'quantumult', 'quantumultx', 'stash', 'sub', 'vless'];
+        $sub_type_array = ['list', 'ssd', 'clash', 'clashmeta' ,'surge', 'surfboard', 'anxray', 'quantumult', 'quantumultx', 'stash', 'sub', 'vless', 'singbox'];
         foreach ($sub_type_array as $key) {
             if (isset($opts[$key])) {
                 // 新增vless
@@ -253,11 +254,18 @@ class LinkController extends BaseController
                     'class' => 'Clash'
                 ];
                 break;
+
             case 'clashmeta':
                 $return = [
                     'filename' => 'ClashMeta',
                     'suffix' => 'yaml',
                     'class' => 'Clash'
+                ];
+            case 'singbox':
+                $return = [
+                    'filename' => 'sing-box',
+                    'suffix' => 'json',
+                    'class' => 'SingBox'
                 ];
                 break;
             case 'surge':
@@ -458,6 +466,7 @@ class LinkController extends BaseController
             'ssa' => '?list=ssa',
             'ssd' => '?ssd=1',
             'anxray'=> '?anxray=1',
+            'singbox' => '?singbox=1',
             'clash' => '?clash=1',
             'clashmeta' => '?clashmeta=1',
             'clash_provider' => '?list=clash',
@@ -872,6 +881,47 @@ class LinkController extends BaseController
 
         return ConfController::getClashConfs($user, $Proxys, $_ENV['Clash_Profiles'][$Profiles]);
     }
+
+
+    public static function getSingBox($user, $ssd, $opts, $Rule)
+    {
+        $jsonData = file_get_contents(BASE_PATH . '/resources/conf/singbox/default.sing-box.json');
+        $config = json_decode($jsonData, true);
+        $outbounds = [];
+        $selector = [
+            "tag" => "节点选择",
+            "type" => "selector",
+            "default" => "自动选择",
+            "outbounds" => ["自动选择"]
+        ];
+        $urltest = [
+            "tag" => "自动选择",
+            "type" => "urltest",
+            "outbounds" => []
+        ];
+        $outbounds[] = &$selector;
+        $items = URL::getNew_AllItems($user, $Rule);
+        foreach ($items as $item) {
+            $Proxy = AppURI::getSingBoxURI($item);
+            if ($Proxy !== null) {
+                $outbounds[] = $Proxy;
+                $selector['outbounds'][] = $item['remark'];
+                $urltest['outbounds'][] = $item['remark'];
+            }
+        }
+        $outbounds[] = [ "tag" => "direct", "type" => "direct" ];
+        $outbounds[] = [ "tag" => "block",  "type" => "block" ];
+        $outbounds[] = [ "tag" => "dns-out", "type" => "dns" ];
+        $outbounds[] = $urltest;
+        $config['outbounds'] = $outbounds;
+
+        header("subscription-userinfo: upload={$user['u']}; download={$user['d']}; total={$user['transfer_enable']}; expire={$user['expired_at']}");
+        header('profile-update-interval: 24');
+        header('content-disposition:attachment;filename*=UTF-8\'\'' . rawurlencode($_ENV['appName']));
+
+        return json_encode($config, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+    }
+
 
     /**
      * SSD 订阅
